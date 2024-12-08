@@ -7,6 +7,7 @@ requires-python = ">=3.10"
 dependencies = [
     "matplotlib>=3.9.3",
     "numpy>=2.1.3",
+    "pandas-stubs>=2.2.3.241126",
     "pandas>=2.2.3",
     "polars>=1.16.0",
     "scikit-learn>=1.5.2",
@@ -35,3 +36,7 @@ markers = ["integration: mark a test as an integration test"]
 warn_return_any = true
 warn_unused_configs = true
 check_untyped_defs = true
+
+[[tool.mypy.overrides]]
+module = ['sklearn.base', 'sklearn.linear_model', 'sklearn.utils.validation']
+ignore_missing_imports = true
