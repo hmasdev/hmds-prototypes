@@ -3,7 +3,11 @@ from typing import Callable, Iterable
 import numpy as np
 import numpy.typing as npt
 from sklearn.base import BaseEstimator, clone, TransformerMixin, RegressorMixin  # noqa
-from sklearn.utils._tags import Tags
+try:
+    # sklearn>=1.6
+    from sklearn.utils._tags import Tags
+except ImportError:
+    Tags = None
 from sklearn.utils.validation import (
     _check_sample_weight,
     check_array,
@@ -112,7 +116,7 @@ class PairwiseMoE(BaseEstimator, RegressorMixin):
         self.weight_func = weight_func
         self.clip_alternative_target = clip_alternative_target
 
-    def __sklearn_tags__(self) -> Tags:
+    def __sklearn_tags__(self) -> "Tags":
         tags = super().__sklearn_tags__()
         tags.estimator_type = 'regressor'
         # TODO: check why estimator_type is not automatically set to 'regressor'.  # noqa
