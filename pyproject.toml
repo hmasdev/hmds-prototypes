@@ -12,9 +12,14 @@ dependencies = [
     "polars>=1.16.0",
     "scikit-learn>=1.5.2,<1.6",
     "scipy>=1.14.1",
+    "skorch>=1.0.0",
     "torch>=2.5.1",
     "tqdm>=4.67.1",
 ]
+
+[project.optional-dependencies]
+cpu = ["torch>=2.5.1"]
+cu118 = ["torch>=2.5.1"]
 
 [tool.uv]
 dev-dependencies = [
@@ -25,6 +30,23 @@ dev-dependencies = [
     "pytest-cov>=6.0.0",
     "ipykernel>=6.29.5",
 ]
+conflicts = [[{ extra = "cpu" }, { extra = "cu118" }]]
+
+[tool.uv.sources]
+torch = [
+    { index = "pytorch-cu118", extra = "cu118" },
+    { index = "pytorch-cpu", extra = "cpu" },
+]
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[[tool.uv.index]]
+name = "pytorch-cu118"
+url = "https://download.pytorch.org/whl/cu118"
+explicit = true
 
 [tool.pytest.ini_options]
 minversion = "6.0"
