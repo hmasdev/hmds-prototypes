@@ -7,7 +7,7 @@ import polars as pl
 import pytest
 from sklearn.base import is_regressor
 from sklearn.linear_model import LinearRegression
-from mlprotobox.attention_stacking import (
+from mlprotobox.moe import (
     _squared_diff_weight,
     PairwiseMoE,
 )
