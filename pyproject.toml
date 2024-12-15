@@ -21,6 +21,9 @@ dependencies = [
 cpu = ["torch>=2.5.1"]
 cu118 = ["torch>=2.5.1"]
 
+[tool.setuptools.packages]
+find = { include = ["mlprotobox"], exclude = ["tests", "samples"] }
+
 [tool.uv]
 dev-dependencies = [
     "autopep8>=2.3.1",
