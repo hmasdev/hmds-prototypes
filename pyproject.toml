@@ -13,8 +13,8 @@ dependencies = [
     "scikit-learn>=1.5.2,<1.6",
     "scipy>=1.14.1",
     "skorch>=1.0.0",
-    "torch>=2.5.1",
-    "tqdm>=4.67.1",
+    "torch>=2.4.0",
+    "tqdm",
 ]
 
 [project.optional-dependencies]
