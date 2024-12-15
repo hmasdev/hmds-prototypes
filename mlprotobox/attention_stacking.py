@@ -3,6 +3,7 @@ from typing import Callable, Iterable
 import numpy as np
 import numpy.typing as npt
 from sklearn.base import BaseEstimator, clone, TransformerMixin, RegressorMixin  # noqa
+from sklearn.utils._tags import Tags
 from sklearn.utils.validation import (
     _check_sample_weight,
     check_array,
@@ -16,7 +17,7 @@ def _squared_diff_weight(x: npt.ArrayLike, y: npt.ArrayLike) -> npt.ArrayLike:
     return (x - y) ** 2  # type: ignore
 
 
-class PairwiseAttentionRegressor(BaseEstimator, RegressorMixin):
+class PairwiseMoE(BaseEstimator, RegressorMixin):
     """A regressor that learns the relationship between pairs of features.
 
     This regressor learns the relationship between pairs of features by
@@ -39,7 +40,7 @@ class PairwiseAttentionRegressor(BaseEstimator, RegressorMixin):
 
         = \\frac{1}{N} \\sum_{1\\leq i,j\\leq D, i\\neq j} \\sum_{n=1}^N w_{nij} | \\varepsilon_{nij} - model_{ij}(x_n) |^2
 
-    where :math:`N` is the number of samples, :math:`D` is the number of attentioned features,
+    where :math:`N` is the number of samples, :math:`D` is the number of expert features,
     :math:`x` is the input data, :math:`y` is the target variable, :math:`model_{ij}` is the model
     fitted to the target variable conditioned on the ratio of the two features, :math:`w_{nij}` is
     the sample weight, and :math:`\\varepsilon_{nij}` is the alternative target variable.
@@ -50,8 +51,10 @@ class PairwiseAttentionRegressor(BaseEstimator, RegressorMixin):
         The base model to fit to the target variable conditioned on the
         ratio of the two features.
 
-    attentioned_columns : Iterable[int] or None, default=None
-        The indices of the columns to pay attention to. If None, all
+    experts_columns : Iterable[int] or None, default=None
+        The indices of the expert columns, where an expert column is a column
+        which is output by a expert model, like the first layer of a
+        StackingRegressor. If None, all
         columns are used.
 
     invertible_transformer : TransformerMixin, default=Identity()
@@ -72,11 +75,13 @@ class PairwiseAttentionRegressor(BaseEstimator, RegressorMixin):
         The base model to fit to the target variable conditioned on the
         ratio of the two features.
 
-    attentioned_columns_ : tuple[int]
-        The indices of the columns to pay attention to.
+    experts_columns_ : tuple[int]
+        The indices of the expert columns. An expert column is a column
+        which is output by a expert model, like the first layer of a
+        StackingRegressor.
 
-    n_attentioned_columns_ : int
-        The number of attentioned columns.
+    n_experts_columns_ : int
+        The number of expert columns.
 
     models_ : dict[tuple[int, int], BaseEstimator]
         The models fitted to the target variable conditioned on the ratio
@@ -95,24 +100,30 @@ class PairwiseAttentionRegressor(BaseEstimator, RegressorMixin):
     def __init__(
         self,
         base_estimator: BaseEstimator,
-        attentioned_columns: Iterable[int] | None = None,
+        experts_columns: Iterable[int] | None = None,
         invertible_transformer: TransformerMixin = Identity(),
         weight_func: Callable[[npt.ArrayLike, npt.ArrayLike], npt.ArrayLike] = _squared_diff_weight,  # noqa: E501
         clip_alternative_target: bool = False,
     ):
         super().__init__()
         self.base_estimator = base_estimator
-        self.attentioned_columns = attentioned_columns
+        self.experts_columns = experts_columns
         self.invertible_transformer = invertible_transformer
         self.weight_func = weight_func
         self.clip_alternative_target = clip_alternative_target
+
+    def __sklearn_tags__(self) -> Tags:
+        tags = super().__sklearn_tags__()
+        tags.estimator_type = 'regressor'
+        # TODO: check why estimator_type is not automatically set to 'regressor'.  # noqa
+        return tags
 
     def fit(
         self,
         X: npt.ArrayLike,
         y: npt.ArrayLike,
         sample_weight: npt.ArrayLike | None = None,
-    ) -> 'PairwiseAttentionRegressor':
+    ) -> 'PairwiseMoE':
         """Fit the regressor.
 
         Parameters
@@ -128,7 +139,7 @@ class PairwiseAttentionRegressor(BaseEstimator, RegressorMixin):
 
         Returns
         -------
-        self : PairwiseAttentionRegressor
+        self : PairwiseMoE
             The regressor itself.
         """
         X, y = check_X_y(X, y)
@@ -136,16 +147,16 @@ class PairwiseAttentionRegressor(BaseEstimator, RegressorMixin):
             sample_weight = _check_sample_weight(sample_weight, X)
 
         # init
-        if self.attentioned_columns is None:
-            self.attentioned_columns_ = tuple(range(X.shape[1]))  # type: ignore # noqa
+        if self.experts_columns is None:
+            self.experts_columns_ = tuple(range(X.shape[1]))  # type: ignore # noqa
         else:
-            self.attentioned_columns_ = tuple(self.attentioned_columns)
-        self.n_attentioned_columns_ = len(self.attentioned_columns_)
+            self.experts_columns_ = tuple(self.experts_columns)
+        self.n_experts_columns_ = len(self.experts_columns_)
         self.models_: dict[tuple[int, int], BaseEstimator] = {}
         self.invertible_transformers_: dict[tuple[int, int], TransformerMixin] = {}  # noqa: E501
 
         # fit
-        for i, j in combinations(self.attentioned_columns_, 2):
+        for i, j in combinations(self.experts_columns_, 2):
 
             # init
             xi = X[:, i]  # type: ignore
@@ -225,12 +236,12 @@ class PairwiseAttentionRegressor(BaseEstimator, RegressorMixin):
 
         Returns
         -------
-        sample_weight_pred : array-like of shape (n_samples, n_attentioned_columns_)
+        sample_weight_pred : array-like of shape (n_samples, n_experts_columns_)
             The predicted sample weights.
         """  # noqa
         check_is_fitted(self)
         X = check_array(X)
-        epsilons = np.zeros((X.shape[0], self.n_attentioned_columns_))  # type: ignore # noqa
+        epsilons = np.zeros((X.shape[0], self.n_experts_columns_))  # type: ignore # noqa
         for (i, j), model in self.models_.items():
             transformer = self.invertible_transformers_[(i, j)]
             epsilon = transformer.inverse_transform(model.predict(X).reshape(-1, 1)).flatten()  # noqa

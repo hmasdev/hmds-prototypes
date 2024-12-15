@@ -5,15 +5,16 @@ import numpy.typing as npt
 import pandas as pd
 import polars as pl
 import pytest
+from sklearn.base import is_regressor
 from sklearn.linear_model import LinearRegression
 from mlprotobox.attention_stacking import (
     _squared_diff_weight,
-    PairwiseAttentionRegressor,
+    PairwiseMoE,
 )
 
 
 @pytest.mark.parametrize(
-    'X,y,attentioned_columns,weight_func,clip_alternative_target',  # noqa
+    'X,y,experts_columns,weight_func,clip_alternative_target',  # noqa
     [
         sum(tups, ())
         for tups in product(
@@ -35,21 +36,22 @@ from mlprotobox.attention_stacking import (
 def test_pairwise_attention_regressor_init(
     X: np.ndarray | pd.DataFrame | pl.DataFrame,
     y: np.ndarray | pd.Series | pl.Series,
-    attentioned_columns: list[int] | None,
+    experts_columns: list[int] | None,
     weight_func: Callable[[npt.ArrayLike, npt.ArrayLike], npt.ArrayLike] | None,  # noqa
     clip_alternative_target: bool,
 ):
-    model = PairwiseAttentionRegressor(
+    model = PairwiseMoE(
         LinearRegression(),
-        attentioned_columns=attentioned_columns,
+        experts_columns=experts_columns,
         weight_func=weight_func,  # type: ignore
         clip_alternative_target=clip_alternative_target,
     )
+    assert is_regressor(model)
     model.fit(X, y, sample_weight=None)
     model.fit(X, y, sample_weight=np.arange(len(X)))
     model.predict(X)
-    if attentioned_columns is None:
+    if experts_columns is None:
         # FIXME: hard-coded
         assert model.get_weight(X).shape[1] == 3  # type: ignore
     else:
-        assert model.get_weight(X).shape[1] == len(attentioned_columns)  # type: ignore # noqa
+        assert model.get_weight(X).shape[1] == len(experts_columns)  # type: ignore # noqa
